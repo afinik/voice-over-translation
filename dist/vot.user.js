@@ -8,7 +8,7 @@
 // @name:zh        [VOT] - 画外音视频翻译
 // @namespace      vot
 // @version        1.11.5
-// @author         Toil, SashaXser, MrSoczekXD, mynovelhost, sodapng
+// @author         Toil, SashaXser, MrSoczekXD, mynovelhosth, sodapng
 // @description    A small extension that adds a Yandex Browser video translation to other browsers
 // @description:de Eine kleine Erweiterung, die eine Voice-over-Übersetzung von Videos aus dem Yandex-Browser zu anderen Browsern hinzufügt
 // @description:es Una pequeña extensión que agrega una traducción de voz en off de un video de Yandex Browser a otros navegadores
@@ -192,6 +192,7 @@
 // @match          *://*.peervideo.club/*
 // @match          *://*.coursehunter.net/*
 // @match          *://*.coursetrain.net/*
+// @match          *://*.skilljar.com/*
 // @exclude        file://*/*.mp4*
 // @exclude        file://*/*.webm*
 // @exclude        *://accounts.youtube.com/*
@@ -3636,6 +3637,7 @@ var vot = (function(exports) {
 		ExtVideoService["deeplearningai"] = "deeplearningai";
 		ExtVideoService["netacad"] = "netacad";
 		ExtVideoService["mediafile"] = "mediafile";
+		ExtVideoService["skilljar"] = "skilljar";
 	})(ExtVideoService || (ExtVideoService = {}));
 	({
 		...VideoService$1,
@@ -4270,6 +4272,13 @@ var vot = (function(exports) {
 			url: "https://mediafile.cc/",
 			match: /^(www\.)?mediafile\.cc$/,
 			selector: "div#playerContainer",
+			needExtraData: true
+		},
+		{
+			host: ExtVideoService.skilljar,
+			url: "https://anthropic.skilljar.com/",
+			match: /skilljar\.com$/,
+			selector: sharedSelectors.jwPlayer,
 			needExtraData: true
 		},
 		{
@@ -5391,6 +5400,38 @@ var vot = (function(exports) {
 	};
 	//#endregion
 	//#region node_modules/@vot.js/ext/dist/helpers/patreon.js
+	var SkilljarHelper = class SkilljarHelper extends BaseHelper {
+		// Skilljar uses JW Player for video playback
+		async getVideoData(videoId) {
+			try {
+				if (!window.jwplayer) {
+					throw new Error("JW Player not found on page");
+				}
+				const player = window.jwplayer();
+				if (!player || typeof player.getDuration !== "function") {
+					throw new Error("JW Player instance not ready");
+				}
+				const item = player.getPlaylistItem ? player.getPlaylistItem() : null;
+				if (!item || !item.sources || !item.sources.length) {
+					throw new Error("No playlist item or sources found");
+				}
+				const source = item.sources[0];
+				const url = source.file;
+				if (!url) {
+					throw new Error("No file URL in JW Player source");
+				}
+				const duration = player.getDuration ? player.getDuration() : (item.duration || 0);
+				return {
+					url,
+					duration,
+					subtitles: []
+				};
+			} catch (err) {
+				console.error("[VOT] SkilljarHelper error:", err.message);
+				return undefined;
+			}
+		}
+	};
 	var PatreonHelper = class extends BaseHelper {
 		API_ORIGIN = "https://www.patreon.com/api";
 		async getPosts(postId) {
@@ -6744,7 +6785,8 @@ var vot = (function(exports) {
 		[ExtVideoService.oraclelearn]: OracleLearnHelper,
 		[ExtVideoService.deeplearningai]: DeeplearningAIHelper,
 		[ExtVideoService.netacad]: NetacadHelper,
-		[ExtVideoService.mediafile]: MediafileHelper
+		[ExtVideoService.mediafile]: MediafileHelper,
+		[ExtVideoService.skilljar]: SkilljarHelper
 	};
 	var VideoHelper = class {
 		helpersData;
