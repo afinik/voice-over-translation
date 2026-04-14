@@ -3,7 +3,7 @@
 // @name:de        [VOT] - Voice-Over-Video-Übersetzung
 // @name:es        [VOT] - Traducción de vídeo en off
 // @name:fr        [VOT] - Traduction vidéo voix-off
-// @name:it        [VOT] - Traduzione Video fuori campo
+// @name:it        [VOT] - Traduzione Video fuori campoh
 // @name:ru        [VOT] - Закадровый перевод видео
 // @name:zh        [VOT] - 画外音视频翻译
 // @namespace      vot
@@ -5412,18 +5412,46 @@ var vot = (function(exports) {
 					throw new Error("JW Player instance not ready");
 				}
 				const item = player.getPlaylistItem ? player.getPlaylistItem() : null;
-				if (!item || !item.sources || !item.sources.length) {
-					throw new Error("No playlist item or sources found");
-				}
-				const source = item.sources[0];
-				const url = source.file;
-				if (!url) {
-					throw new Error("No file URL in JW Player source");
+				if (!item) {
+					throw new Error("No playlist item found");
 				}
 				const duration = player.getDuration ? player.getDuration() : (item.duration || 0);
+				const mediaid = item.mediaid;
+				// Try to get direct MP4 from JWPlayer CDN API
+				if (mediaid) {
+					try {
+						const apiUrl = "https://cdn.jwplayer.com/v2/media/" + mediaid;
+						const apiResp = await window.fetch(apiUrl);
+						if (apiResp.ok) {
+							const apiData = await apiResp.json();
+							const sources = apiData.playlist?.[0]?.sources || [];
+							const mp4Sources = sources.filter((s) => s.type === "video/mp4");
+							if (mp4Sources.length) {
+								// Prefer 720p, fallback to best available
+								const preferred = mp4Sources.find((s) => s.height === 720) || mp4Sources.find((s) => s.height >= 480 && s.height <= 1080) || mp4Sources[mp4Sources.length - 1];
+								const mp4Url = preferred.file;
+								return {
+									url: videoId,
+									duration,
+									translationHelp: [{ target: "video_file_url", targetUrl: mp4Url }],
+									subtitles: []
+								};
+							}
+						}
+					} catch (apiErr) {
+						console.warn("[VOT] SkilljarHelper JWPlayer API fallback:", apiErr.message);
+					}
+				}
+				// Fallback: use HLS source directly
+				const sources = item.sources || [];
+				const source = sources.find((s) => s.type === "video/mp4") || sources[0];
+				if (!source?.file) {
+					throw new Error("No file URL in JW Player source");
+				}
 				return {
-					url,
+					url: videoId,
 					duration,
+					translationHelp: [{ target: "video_file_url", targetUrl: source.file }],
 					subtitles: []
 				};
 			} catch (err) {
